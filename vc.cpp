@@ -203,7 +203,7 @@ Device::Device(const Instance *instance, VkPhysicalDevice physDevice)
                                                                .flags = 0,
                                                                .queueFamilyIndex = m_queueFamilyIndex,
                                                                .queueCount = 1,
-                                                               .pQueuePriorities = nullptr};
+                                                               .pQueuePriorities = &queuePriority};
 
         const VkDeviceCreateInfo deviceCreateInfo = {.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
                                                      .pNext = nullptr,
@@ -304,12 +304,13 @@ Instance::Instance()
                                                .engineVersion = 0,
                                                .apiVersion = VK_MAKE_VERSION(1, 0, 9)};
 
+    const auto layers = std::array{"VK_LAYER_KHRONOS_validation"};
     const VkInstanceCreateInfo instanceCreateInfo = {.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
                                                      .pNext = nullptr,
                                                      .flags = 0,
                                                      .pApplicationInfo = &applicationInfo,
-                                                     .enabledLayerCount = 0,
-                                                     .ppEnabledLayerNames = nullptr,
+                                                     .enabledLayerCount = layers.size(),
+                                                     .ppEnabledLayerNames = layers.data(),
                                                      .enabledExtensionCount = 0,
                                                      .ppEnabledExtensionNames = nullptr};
 

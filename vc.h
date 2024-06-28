@@ -12,7 +12,7 @@
 
 #define VK_CHECK(call)                                                                                                 \
     {                                                                                                                  \
-        auto result = (call);                                                                                          \
+        const auto result = (call);                                                                                    \
         if (result != VK_SUCCESS)                                                                                      \
         {                                                                                                              \
             std::fprintf(stderr, "Vulkan error at %s:%d: %d\n", __FILE__, __LINE__, result);                           \
