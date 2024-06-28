@@ -6,6 +6,8 @@
 
 std::array<uint8_t, 32> sha256(std::string_view message)
 {
+    assert(message.size() < 56);
+
     std::array<uint32_t, 16> data;
     data.fill(0);
     {
