@@ -12,3 +12,6 @@ target_link_libraries(simple Vulkan::Vulkan)
 
 add_executable(sha256 sha256.cpp vc.hpp vc.cpp)
 target_link_libraries(sha256 Vulkan::Vulkan)
+
+add_executable(miner miner.cpp vc.hpp vc.cpp)
+target_link_libraries(miner Vulkan::Vulkan)
