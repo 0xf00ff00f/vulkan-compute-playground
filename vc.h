@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -148,7 +149,7 @@ public:
     void dispatch(uint32_t groupCountX = 1, uint32_t groupCountY = 1, uint32_t groupCountZ = 1) const;
 
 private:
-    template<typename... Buffers>
+    template<std::convertible_to<VkBuffer>... Buffers>
     void initPipeline(const Buffers &...buffers)
     {
         const auto descriptorSetLayoutBindings = makeDescriptorSetLayoutBindings(std::index_sequence_for<Buffers...>{});
