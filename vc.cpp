@@ -256,6 +256,9 @@ Device::Device(Device &&rhs)
     , m_physDevice(std::exchange(rhs.m_physDevice, VK_NULL_HANDLE))
     , m_queueFamilyIndex(std::exchange(rhs.m_queueFamilyIndex, ~0u))
     , m_device(std::exchange(rhs.m_device, VK_NULL_HANDLE))
+    , m_commandPool(std::exchange(rhs.m_commandPool, VK_NULL_HANDLE))
+    , m_commandBuffer(std::exchange(rhs.m_commandBuffer, VK_NULL_HANDLE))
+    , m_computeQueue(std::exchange(rhs.m_computeQueue, VK_NULL_HANDLE))
 {
 }
 
@@ -292,6 +295,9 @@ void swap(Device &lhs, Device &rhs)
     swap(lhs.m_physDevice, rhs.m_physDevice);
     swap(lhs.m_queueFamilyIndex, rhs.m_queueFamilyIndex);
     swap(lhs.m_device, rhs.m_device);
+    swap(lhs.m_commandPool, rhs.m_commandPool);
+    swap(lhs.m_commandBuffer, rhs.m_commandBuffer);
+    swap(lhs.m_computeQueue, rhs.m_computeQueue);
 }
 
 Instance::Instance()
