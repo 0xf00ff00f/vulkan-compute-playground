@@ -80,6 +80,9 @@ public:
     operator VkDevice() const { return m_device; }
 
     std::uint32_t computeQueueFamilyIndex() const { return m_queueFamilyIndex; }
+    VkCommandPool commandPool() const { return m_commandPool; }
+    VkCommandBuffer commandBuffer() const { return m_commandBuffer; }
+    VkQueue computeQueue() const { return m_computeQueue; }
 
     std::uint32_t findHostVisibleMemory(VkDeviceSize size) const;
 
@@ -88,6 +91,9 @@ private:
     VkPhysicalDevice m_physDevice{VK_NULL_HANDLE};
     std::uint32_t m_queueFamilyIndex{~0u};
     VkDevice m_device{VK_NULL_HANDLE};
+    VkCommandPool m_commandPool{VK_NULL_HANDLE};
+    VkCommandBuffer m_commandBuffer{VK_NULL_HANDLE};
+    VkQueue m_computeQueue{VK_NULL_HANDLE};
 };
 
 class Buffer
@@ -139,7 +145,7 @@ public:
         initPipeline(buffers...);
     }
 
-    void run() const;
+    void dispatch(uint32_t groupCountX = 1, uint32_t groupCountY = 1, uint32_t groupCountZ = 1) const;
 
 private:
     template<typename... Buffers>

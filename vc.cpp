@@ -88,8 +88,34 @@ void Program::releasePipeline()
         vkDestroyDescriptorSetLayout(*m_device, m_descriptorSetLayout, nullptr);
 }
 
-void Program::run() const
+void Program::dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) const
 {
+    const auto commandBuffer = m_device->commandBuffer();
+    const auto queue = m_device->computeQueue();
+
+    const VkCommandBufferBeginInfo commandBufferBeginInfo = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                                                             .pNext = nullptr,
+                                                             .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+                                                             .pInheritanceInfo = nullptr};
+    VK_CHECK(vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo));
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipelineLayout, 0, 1, &m_descriptorSet, 0,
+                            nullptr);
+    vkCmdDispatch(commandBuffer, groupCountX, groupCountY, groupCountZ);
+    VK_CHECK(vkEndCommandBuffer(commandBuffer));
+
+    const VkSubmitInfo submitInfo = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                                     .pNext = nullptr,
+                                     .waitSemaphoreCount = 0,
+                                     .pWaitSemaphores = nullptr,
+                                     .pWaitDstStageMask = nullptr,
+                                     .commandBufferCount = 1,
+                                     .pCommandBuffers = &commandBuffer,
+                                     .signalSemaphoreCount = 0,
+                                     .pSignalSemaphores = nullptr};
+    VK_CHECK(vkQueueSubmit(queue, 1, &submitInfo, 0));
+
+    VK_CHECK(vkQueueWaitIdle(queue));
 }
 
 Buffer::Buffer(const Device *device, VkDeviceSize size)
@@ -191,11 +217,36 @@ Device::Device(const Instance *instance, VkPhysicalDevice physDevice)
                                                      .pEnabledFeatures = nullptr};
 
         VK_CHECK(vkCreateDevice(m_physDevice, &deviceCreateInfo, nullptr, &m_device));
+
+        const VkCommandPoolCreateInfo commandPoolCreateInfo = {.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                                                               .pNext = nullptr,
+                                                               .flags = 0,
+                                                               .queueFamilyIndex = m_queueFamilyIndex};
+
+        VK_CHECK(vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPool));
+
+        const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext = nullptr,
+            .commandPool = m_commandPool,
+            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = 1,
+        };
+
+        VK_CHECK(vkAllocateCommandBuffers(m_device, &commandBufferAllocateInfo, &m_commandBuffer));
+
+        vkGetDeviceQueue(m_device, m_queueFamilyIndex, 0, &m_computeQueue);
     }
 }
 
 Device::~Device()
 {
+    if (m_commandBuffer)
+        vkFreeCommandBuffers(m_device, m_commandPool, 1, &m_commandBuffer);
+
+    if (m_commandPool)
+        vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+
     if (m_device)
         vkDestroyDevice(m_device, nullptr);
 }
