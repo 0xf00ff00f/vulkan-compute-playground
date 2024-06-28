@@ -16,6 +16,14 @@ layout (std430, binding = 1) buffer DataBuffer { uint data[]; } dataBuffer;
 #define SIG0(x) (ROTRIGHT(x, 7) ^ ROTRIGHT(x, 18) ^ ((x) >> 3))
 #define SIG1(x) (ROTRIGHT(x, 17) ^ ROTRIGHT(x, 19) ^ ((x) >> 10))
 
+uint bswap(uint x)
+{
+    return ((x << 24) & 0xff000000) |
+           ((x <<  8) & 0x00ff0000) |
+           ((x >>  8) & 0x0000ff00) |
+           ((x >> 24) & 0x000000ff);
+}
+
 void main(void)
 {
     const uint k[64] = uint[](
@@ -30,7 +38,7 @@ void main(void)
 
     uint m[64];
     for (uint i = 0u; i < 16u; i++)
-        m[i] = dataBuffer.data[i];
+        m[i] = bswap(dataBuffer.data[i]);
     for (uint i = 16u; i < 64u; i++)
         m[i] = SIG1(m[i - 2]) + m[i - 7] + SIG0(m[i - 15]) + m[i - 16];
 

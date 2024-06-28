@@ -12,9 +12,7 @@ std::array<uint8_t, 32> sha256(std::string_view message)
         auto *u8 = reinterpret_cast<uint8_t *>(data.data());
         std::memcpy(u8, message.data(), message.size());
         u8[message.size()] = 0x80;
-        for (std::size_t i = 0; i < 15; ++i)
-            data[i] = __builtin_bswap32(data[i]);
-        data[15] = message.size() * 8;
+        data[15] = __builtin_bswap32(message.size() * 8);
     }
 
     const std::array<uint32_t, 8> state = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
