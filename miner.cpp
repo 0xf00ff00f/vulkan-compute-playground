@@ -1,6 +1,7 @@
 #include "vc.hpp"
 
 #include <cassert>
+#include <chrono>
 #include <cstring>
 
 using namespace std::string_view_literals;
@@ -30,6 +31,7 @@ private:
     uint32_t *m_state{nullptr};
     std::size_t m_batchSize{0};
     std::array<uint32_t, 8> m_bestHash;
+    std::size_t m_hashCount{0};
 };
 
 Miner::Miner(vc::Device *device)
@@ -53,6 +55,9 @@ void Miner::search(std::string_view prefix, std::size_t nonceSize)
 {
     m_bestHash.fill(~0u);
     m_batchSize = 0;
+    m_hashCount = 0;
+
+    const auto timeStart = std::chrono::steady_clock::now();
 
     std::string message;
     message.resize(prefix.size() + nonceSize);
@@ -60,6 +65,13 @@ void Miner::search(std::string_view prefix, std::size_t nonceSize)
     enumerate(message, prefix.size());
 
     doCompute(message.size());
+
+    const auto timeEnd = std::chrono::steady_clock::now();
+    const auto elapsed = timeEnd - timeStart;
+    const auto hashesPerSec = static_cast<double>(m_hashCount) * 1000 /
+                              std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() / 1000000;
+    std::printf("%lu hashes, %lu ms (%.2f Mhashes/sec)\n", m_hashCount,
+                std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(), hashesPerSec);
 }
 
 void Miner::enumerate(std::string &message, std::size_t index)
@@ -95,7 +107,9 @@ void Miner::doCompute(std::size_t messageSize)
     if (m_batchSize == 0)
         return;
 
+    const auto groupCount = (m_batchSize + LocalSize - 1) / LocalSize;
     m_program.dispatch((m_batchSize + LocalSize - 1) / LocalSize, 1, 1);
+    m_hashCount += groupCount * LocalSize;
 
     for (std::size_t index = 0; index < m_batchSize; ++index)
     {
