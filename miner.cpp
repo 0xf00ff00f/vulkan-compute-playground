@@ -7,20 +7,6 @@ using namespace std::string_view_literals;
 
 constexpr std::string_view Charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"sv;
 
-using Hash = std::array<unsigned char, 32>;
-
-bool operator<(const Hash &lhs, const Hash &rhs)
-{
-    for (std::size_t i = 0; i < 32; ++i)
-    {
-        if (lhs[i] < rhs[i])
-            return true;
-        if (rhs[i] < lhs[i])
-            return false;
-    }
-    return false;
-}
-
 class Miner
 {
 public:
@@ -43,7 +29,7 @@ private:
     uint32_t *m_data{nullptr};
     uint32_t *m_state{nullptr};
     std::size_t m_batchSize{0};
-    Hash m_bestHash;
+    std::array<uint8_t, 32> m_bestHash;
 };
 
 Miner::Miner(vc::Device *device)
@@ -113,17 +99,25 @@ void Miner::doCompute(std::size_t messageSize)
 
     for (std::size_t index = 0; index < m_batchSize; ++index)
     {
-        std::array<uint8_t, 32> hash;
-        const auto *state = reinterpret_cast<uint8_t *>(&m_state[index * 8]);
-        std::copy(state, state + 32, hash.begin());
-        if (hash < m_bestHash)
+        const auto *hash = reinterpret_cast<uint8_t *>(&m_state[index * 8]);
+        const auto isBest = [this, hash]() -> bool {
+            for (std::size_t i = 0; i < 32; ++i)
+            {
+                if (hash[i] < m_bestHash[i])
+                    return true;
+                if (m_bestHash[i] < hash[i])
+                    return false;
+            }
+            return false;
+        }();
+        if (isBest)
         {
             const auto *message = reinterpret_cast<uint8_t *>(&m_data[index * 16]);
             std::printf("%.*s: ", static_cast<int>(messageSize), message);
-            for (auto c : hash)
-                std::printf("%02x", c);
+            for (std::size_t i = 0; i < 32; ++i)
+                std::printf("%02x", hash[i]);
             std::printf("\n");
-            m_bestHash = hash;
+            std::copy(hash, hash + 32, m_bestHash.begin());
         }
     }
 

@@ -15,3 +15,4 @@ target_link_libraries(sha256 Vulkan::Vulkan)
 
 add_executable(miner miner.cpp vc.hpp vc.cpp)
 target_link_libraries(miner Vulkan::Vulkan)
+target_compile_options(miner PRIVATE -Ofast -march=native -mtune=native)
