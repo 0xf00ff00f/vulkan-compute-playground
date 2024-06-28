@@ -7,5 +7,8 @@ set(CMAKE_CXX_STANDARD 20)
 
 find_package(Vulkan REQUIRED)
 
-add_executable(test main.cpp vc.h vc.cpp)
-target_link_libraries(test Vulkan::Vulkan)
+add_executable(simple main.cpp vc.hpp vc.cpp)
+target_link_libraries(simple Vulkan::Vulkan)
+
+add_executable(sha256 sha256.cpp vc.hpp vc.cpp)
+target_link_libraries(sha256 Vulkan::Vulkan)

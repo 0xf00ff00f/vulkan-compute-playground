@@ -100,7 +100,7 @@ public:
 
     operator VkBuffer() const { return m_buffer; }
 
-    std::span<std::byte> map() const;
+    std::byte *map() const;
     void unmap() const;
 
 private:

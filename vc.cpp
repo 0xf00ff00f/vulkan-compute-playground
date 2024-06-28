@@ -178,11 +178,11 @@ void swap(Buffer &lhs, Buffer &rhs)
     swap(lhs.m_buffer, rhs.m_buffer);
 }
 
-std::span<std::byte> Buffer::map() const
+std::byte *Buffer::map() const
 {
     std::byte *data;
     VK_CHECK(vkMapMemory(*m_device, m_deviceMemory, 0, m_size, 0, reinterpret_cast<void **>(&data)));
-    return std::span(data, m_size);
+    return data;
 }
 
 void Buffer::unmap() const

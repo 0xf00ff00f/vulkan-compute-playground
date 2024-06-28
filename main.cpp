@@ -15,8 +15,7 @@ int main()
 
         vc::Buffer inBuffer(&device, Size * sizeof(float));
         {
-            auto bytes = inBuffer.map();
-            auto *p = reinterpret_cast<float *>(bytes.data());
+            auto *p = reinterpret_cast<float *>(inBuffer.map());
             std::iota(p, p + Size, 1);
             inBuffer.unmap();
         }
@@ -27,8 +26,7 @@ int main()
 
         program.dispatch(Size, 1, 1);
         {
-            const auto bytes = outBuffer.map();
-            const auto *p = reinterpret_cast<const float *>(bytes.data());
+            const auto *p = reinterpret_cast<const float *>(outBuffer.map());
             for (std::size_t i = 0; i < Size; ++i)
                 std::printf("%lu: %f\n", i, p[i]);
             outBuffer.unmap();
