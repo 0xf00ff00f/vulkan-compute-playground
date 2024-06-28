@@ -22,7 +22,7 @@ int main()
         vc::Buffer outBuffer(&device, Size * sizeof(float));
 
         vc::Program program(&device, "simple.comp.spv");
-        program.bindBuffers(inBuffer, outBuffer);
+        program.bind(inBuffer, outBuffer);
 
         program.dispatch(Size, 1, 1);
         {

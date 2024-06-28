@@ -126,7 +126,7 @@ public:
     friend void swap(Program &lhs, Program &rhs);
 
     template<std::convertible_to<VkBuffer>... Buffers>
-    void bindBuffers(const Buffers &...buffers)
+    void bind(const Buffers &...buffers)
     {
         releasePipeline();
         initPipeline(buffers...);

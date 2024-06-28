@@ -38,7 +38,7 @@ std::array<uint8_t, 32> sha256(std::string_view message)
     }
 
     vc::Program program(&device, "sha256.comp.spv");
-    program.bindBuffers(stateBuffer, dataBuffer);
+    program.bind(stateBuffer, dataBuffer);
     program.dispatch(1, 1, 1);
 
     std::array<uint8_t, 32> hash;
