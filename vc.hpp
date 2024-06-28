@@ -4,9 +4,11 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -23,22 +25,6 @@
 
 namespace vc
 {
-
-namespace
-{
-
-template<std::size_t... Idx>
-std::array<VkDescriptorSetLayoutBinding, sizeof...(Idx)> makeDescriptorSetLayoutBindings(std::index_sequence<Idx...>)
-{
-    return std::array{VkDescriptorSetLayoutBinding{.binding = Idx,
-                                                   .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                                   .descriptorCount = 1,
-                                                   .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                                                   .pImmutableSamplers = nullptr}...};
-}
-
-}; // namespace
-
 class Device;
 
 class Instance
@@ -152,7 +138,15 @@ private:
     template<std::convertible_to<VkBuffer>... Buffers>
     void initPipeline(const Buffers &...buffers)
     {
-        const auto descriptorSetLayoutBindings = makeDescriptorSetLayoutBindings(std::index_sequence_for<Buffers...>{});
+        const auto descriptorSetLayoutBindings = std::invoke(
+            []<std::size_t... Idx>(std::index_sequence<Idx...>) {
+                return std::array{VkDescriptorSetLayoutBinding{.binding = Idx,
+                                                               .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                                               .descriptorCount = 1,
+                                                               .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                                                               .pImmutableSamplers = nullptr}...};
+            },
+            std::index_sequence_for<Buffers...>{});
 
         const VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -213,20 +207,20 @@ private:
 
         const auto bufferInfos = std::array{
             VkDescriptorBufferInfo{.buffer = static_cast<VkBuffer>(buffers), .offset = 0, .range = VK_WHOLE_SIZE}...};
-        std::array<VkWriteDescriptorSet, sizeof...(buffers)> writeDescriptorSets;
-        for (std::size_t i = 0; i < sizeof...(buffers); ++i)
-        {
-            writeDescriptorSets[i] = VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                                          .pNext = nullptr,
-                                                          .dstSet = m_descriptorSet,
-                                                          .dstBinding = static_cast<uint32_t>(i),
-                                                          .dstArrayElement = 0,
-                                                          .descriptorCount = 1,
-                                                          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                                          .pImageInfo = nullptr,
-                                                          .pBufferInfo = &bufferInfos[i],
-                                                          .pTexelBufferView = nullptr};
-        }
+        const auto writeDescriptorSets = std::invoke(
+            [this, &bufferInfos]<std::size_t... Idx>(std::index_sequence<Idx...>) {
+                return std::array{VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                                       .pNext = nullptr,
+                                                       .dstSet = m_descriptorSet,
+                                                       .dstBinding = Idx,
+                                                       .dstArrayElement = 0,
+                                                       .descriptorCount = 1,
+                                                       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                                       .pImageInfo = nullptr,
+                                                       .pBufferInfo = &bufferInfos[Idx],
+                                                       .pTexelBufferView = nullptr}...};
+            },
+            std::index_sequence_for<Buffers...>{});
         vkUpdateDescriptorSets(*m_device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, nullptr);
     }
 
