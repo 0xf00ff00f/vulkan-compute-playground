@@ -29,7 +29,7 @@ private:
     uint32_t *m_data{nullptr};
     uint32_t *m_state{nullptr};
     std::size_t m_batchSize{0};
-    std::array<uint8_t, 32> m_bestHash;
+    std::array<uint32_t, 8> m_bestHash;
 };
 
 Miner::Miner(vc::Device *device)
@@ -51,7 +51,7 @@ Miner::~Miner()
 
 void Miner::search(std::string_view prefix, std::size_t nonceSize)
 {
-    m_bestHash.fill(0xff);
+    m_bestHash.fill(~0u);
     m_batchSize = 0;
 
     std::string message;
@@ -99,9 +99,9 @@ void Miner::doCompute(std::size_t messageSize)
 
     for (std::size_t index = 0; index < m_batchSize; ++index)
     {
-        const auto *hash = reinterpret_cast<uint8_t *>(&m_state[index * 8]);
+        const auto *hash = &m_state[index * 8];
         const auto isBest = [this, hash]() -> bool {
-            for (std::size_t i = 0; i < 32; ++i)
+            for (std::size_t i = 0; i < 8; ++i)
             {
                 if (hash[i] < m_bestHash[i])
                     return true;
@@ -114,10 +114,10 @@ void Miner::doCompute(std::size_t messageSize)
         {
             const auto *message = reinterpret_cast<uint8_t *>(&m_data[index * 16]);
             std::printf("%.*s: ", static_cast<int>(messageSize), message);
-            for (std::size_t i = 0; i < 32; ++i)
-                std::printf("%02x", hash[i]);
+            for (std::size_t i = 0; i < 8; ++i)
+                std::printf("%08x", hash[i]);
             std::printf("\n");
-            std::copy(hash, hash + 32, m_bestHash.begin());
+            std::copy(hash, hash + 8, m_bestHash.begin());
         }
     }
 

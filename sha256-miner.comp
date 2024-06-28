@@ -82,5 +82,5 @@ void main(void)
     state[7] += h;
 
     for (uint i = 0u; i < 8u; i++)
-        hashBuffer.data[hashIndex + i] = bswap(state[i]);
+        hashBuffer.data[hashIndex + i] = state[i];
 }
