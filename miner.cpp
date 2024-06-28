@@ -80,8 +80,6 @@ void Miner::enumerate(std::string &message, std::size_t index)
 {
     if (index == message.size())
     {
-        const std::array<uint32_t, 8> InitialState = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                                                      0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
         uint32_t *data = &m_data[m_batchSize * 16];
         {
             assert(message.size() < 56);
@@ -91,9 +89,6 @@ void Miner::enumerate(std::string &message, std::size_t index)
             u8Data[message.size()] = 0x80;
             data[15] = __builtin_bswap32(message.size() * 8);
         }
-
-        uint32_t *state = &m_state[m_batchSize * 8];
-        std::copy(InitialState.begin(), InitialState.end(), state);
 
         ++m_batchSize;
         if (m_batchSize == BatchSize)
@@ -119,10 +114,8 @@ void Miner::doCompute(std::size_t messageSize)
     for (std::size_t index = 0; index < m_batchSize; ++index)
     {
         std::array<uint8_t, 32> hash;
-        const auto *state = &m_state[index * 8];
-        auto *hashData = reinterpret_cast<uint32_t *>(hash.data());
-        for (std::size_t i = 0; i < 8; ++i)
-            hashData[i] = __builtin_bswap32(state[i]);
+        const auto *state = reinterpret_cast<uint8_t *>(&m_state[index * 8]);
+        std::copy(state, state + 32, hash.begin());
         if (hash < m_bestHash)
         {
             const auto *message = reinterpret_cast<uint8_t *>(&m_data[index * 16]);
@@ -140,7 +133,7 @@ void Miner::doCompute(std::size_t messageSize)
 int main()
 {
     vc::Instance instance;
-    auto device = std::move(instance.devices().at(1));
+    auto device = std::move(instance.devices().at(0));
 
     const std::string_view prefix = "hello/";
 

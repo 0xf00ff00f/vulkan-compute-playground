@@ -1,7 +1,7 @@
 #version 430 core
 
 layout (local_size_x = 256) in;
-layout (std430, binding = 0) buffer StateBuffer { uint data[]; } stateBuffer;
+layout (std430, binding = 0) buffer HashBuffer { uint data[]; } hashBuffer;
 layout (std430, binding = 1) buffer DataBuffer { uint data[]; } dataBuffer;
 
 // Based on the public domain implementation by Brad Conte
@@ -28,7 +28,7 @@ void main(void)
 {
     uint id = gl_GlobalInvocationID.x;
     uint dataIndex = id * 16;
-    uint stateIndex = id * 8;
+    uint hashIndex = id * 8;
 
     const uint k[64] = uint[](
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -46,14 +46,17 @@ void main(void)
     for (uint i = 16u; i < 64u; i++)
         m[i] = SIG1(m[i - 2]) + m[i - 7] + SIG0(m[i - 15]) + m[i - 16];
 
-    uint a = stateBuffer.data[stateIndex + 0];
-    uint b = stateBuffer.data[stateIndex + 1];
-    uint c = stateBuffer.data[stateIndex + 2];
-    uint d = stateBuffer.data[stateIndex + 3];
-    uint e = stateBuffer.data[stateIndex + 4];
-    uint f = stateBuffer.data[stateIndex + 5];
-    uint g = stateBuffer.data[stateIndex + 6];
-    uint h = stateBuffer.data[stateIndex + 7];
+    uint state[8] = uint[](0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                           0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19);
+
+    uint a = state[0];
+    uint b = state[1];
+    uint c = state[2];
+    uint d = state[3];
+    uint e = state[4];
+    uint f = state[5];
+    uint g = state[6];
+    uint h = state[7];
 
     for (uint i = 0u; i < 64u; i++)
     {
@@ -69,12 +72,15 @@ void main(void)
         a = t1 + t2;
     }
 
-    stateBuffer.data[stateIndex + 0] += a;
-    stateBuffer.data[stateIndex + 1] += b;
-    stateBuffer.data[stateIndex + 2] += c;
-    stateBuffer.data[stateIndex + 3] += d;
-    stateBuffer.data[stateIndex + 4] += e;
-    stateBuffer.data[stateIndex + 5] += f;
-    stateBuffer.data[stateIndex + 6] += g;
-    stateBuffer.data[stateIndex + 7] += h;
+    state[0] += a;
+    state[1] += b;
+    state[2] += c;
+    state[3] += d;
+    state[4] += e;
+    state[5] += f;
+    state[6] += g;
+    state[7] += h;
+
+    for (uint i = 0u; i < 8u; i++)
+        hashBuffer.data[hashIndex + i] = bswap(state[i]);
 }
