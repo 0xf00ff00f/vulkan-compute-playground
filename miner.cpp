@@ -35,14 +35,17 @@ private:
         uint32_t messagePrefix[16];
     };
 
+    struct Result
+    {
+        uint32_t nonceIndex;
+    };
+
     vc::Device *m_device;
     vc::Program m_program;
     vc::Buffer m_inputBuffer;
     vc::Buffer m_resultBuffer;
     Input *m_input{nullptr};
-    uint32_t *m_result{nullptr};
-    std::size_t m_batchSize{0};
-    std::size_t m_hashCount{0};
+    Result *m_result{nullptr};
 };
 
 Miner::Miner(vc::Device *device)
@@ -53,7 +56,7 @@ Miner::Miner(vc::Device *device)
 {
     m_program.bind(m_inputBuffer, m_resultBuffer);
     m_input = reinterpret_cast<Input *>(m_inputBuffer.map());
-    m_result = reinterpret_cast<uint32_t *>(m_resultBuffer.map());
+    m_result = reinterpret_cast<Result *>(m_resultBuffer.map());
 }
 
 Miner::~Miner()
@@ -74,30 +77,28 @@ void Miner::search(std::string_view prefix)
     }
     message[15] = __builtin_bswap32(messageSize * 8);
 
-    m_batchSize = 0;
-    m_hashCount = 0;
-
     const auto timeStart = std::chrono::steady_clock::now();
 
+    std::size_t hashCount = 0;
     uint32_t nonceIndexBase = 0;
-    uint32_t minLeadingZeros = 4;
-
-    for (int i = 0; i < 65536; ++i)
+    uint32_t minLeadingZeros = 16;
+    for (uint64_t i = 0; i < (uint64_t(1) << 32) / BatchSize; ++i)
     {
         m_input->minLeadingZeros = minLeadingZeros;
         m_input->nonceIndexBase = nonceIndexBase;
         m_input->prefixSize = prefix.size();
         std::copy(message.begin(), message.end(), m_input->messagePrefix);
 
-        *m_result = ~0u;
+        m_result->nonceIndex = ~0u;
 
         const auto groupCount = (BatchSize + LocalSize - 1) / LocalSize;
-        m_program.dispatch(groupCount / LocalSize, 1, 1);
-        m_hashCount += BatchSize;
+        m_program.dispatch(groupCount, 1, 1);
+        hashCount += groupCount * LocalSize;
 
-        if (*m_result != ~0u)
+        if (m_result->nonceIndex != ~0u)
         {
-            int leadingZeros = dumpResult(prefix, *m_result);
+            int leadingZeros = dumpResult(prefix, m_result->nonceIndex);
+            assert(leadingZeros >= minLeadingZeros);
             minLeadingZeros = leadingZeros + 1;
         }
 
@@ -106,9 +107,9 @@ void Miner::search(std::string_view prefix)
 
     const auto timeEnd = std::chrono::steady_clock::now();
     const auto elapsed = timeEnd - timeStart;
-    const auto hashesPerSec = static_cast<double>(m_hashCount) * 1000 /
+    const auto hashesPerSec = static_cast<double>(hashCount) * 1000 /
                               std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() / 1000000;
-    std::printf("%lu hashes, %lu ms (%.2f Mhashes/sec)\n", m_hashCount,
+    std::printf("%lu hashes, %lu ms (%.2f Mhashes/sec)\n", hashCount,
                 std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(), hashesPerSec);
 }
 
@@ -158,7 +159,7 @@ int Miner::dumpResult(std::string_view prefix, uint32_t nonceIndex) const
 int main()
 {
     vc::Instance instance;
-    auto device = std::move(instance.devices().at(1));
+    auto device = std::move(instance.devices().at(0));
 
     const std::string_view prefix = "hello/";
 

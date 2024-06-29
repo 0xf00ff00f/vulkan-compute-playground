@@ -11,7 +11,7 @@ layout (std430, binding = 1) buffer ResultBuffer {
     uint resultNonceIndex;
 };
 
-// Based on the public domain implementation by Brad Conte
+// SHA-256 transform based on the public domain implementation by Brad Conte
 
 #define ROTLEFT(a, b) (((a) << (b)) | ((a) >> (32 - (b))))
 #define ROTRIGHT(a, b) (((a) >> (b)) | ((a) << (32 - (b))))
@@ -55,11 +55,9 @@ void main(void)
     for (int i = 0; i < 8; i++)
     {
         uint byteIndex = prefixSize + i;
-        uint c = charset[(nonceIndex >> (4 * i)) & 0xf];
-        uint w = message[byteIndex / 4];
         uint shift = (byteIndex % 4) * 8;
-        w = (w & ~(0xff << shift)) | (c << shift);
-        message[byteIndex / 4] |= w;
+        uint c = charset[(nonceIndex >> (4 * i)) & 0xf] << shift;
+        message[byteIndex / 4] |= c;
     }
 
     uint m[64];
