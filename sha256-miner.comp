@@ -1,8 +1,15 @@
-#version 430 core
+#version 460 core
 
 layout (local_size_x = 256) in;
-layout (std430, binding = 0) buffer HashBuffer { uint data[]; } hashBuffer;
-layout (std430, binding = 1) buffer DataBuffer { uint data[]; } dataBuffer;
+layout (std430, binding = 0) buffer InputBuffer {
+    uint minLeadingZeros;
+    uint nonceIndexBase;
+    uint prefixSize;
+    uint messagePrefix[16];
+};
+layout (std430, binding = 1) buffer ResultBuffer {
+    uint resultNonceIndex;
+};
 
 // Based on the public domain implementation by Brad Conte
 
@@ -26,9 +33,9 @@ uint bswap(uint x)
 
 void main(void)
 {
-    uint id = gl_GlobalInvocationID.x;
-    uint dataIndex = id * 16;
-    uint hashIndex = id * 8;
+    const uint charset[16] = uint[](
+        0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, // '0' - '9'
+        0x41, 0x42, 0x43, 0x44, 0x45, 0x46);                        // 'A' - 'F'
 
     const uint k[64] = uint[](
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -40,10 +47,25 @@ void main(void)
         0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
         0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2);
 
+    uint nonceIndex = nonceIndexBase + gl_GlobalInvocationID.x;
+
+    uint message[16];
+    for (int i = 0; i < 16; i++)
+        message[i] = messagePrefix[i];
+    for (int i = 0; i < 8; i++)
+    {
+        uint byteIndex = prefixSize + i;
+        uint c = charset[(nonceIndex >> (4 * i)) & 0xf];
+        uint w = message[byteIndex / 4];
+        uint shift = (byteIndex % 4) * 8;
+        w = (w & ~(0xff << shift)) | (c << shift);
+        message[byteIndex / 4] |= w;
+    }
+
     uint m[64];
-    for (uint i = 0u; i < 16u; i++)
-        m[i] = bswap(dataBuffer.data[dataIndex + i]);
-    for (uint i = 16u; i < 64u; i++)
+    for (int i = 0; i < 16; i++)
+        m[i] = bswap(message[i]);
+    for (int i = 16; i < 64; i++)
         m[i] = SIG1(m[i - 2]) + m[i - 7] + SIG0(m[i - 15]) + m[i - 16];
 
     uint state[8] = uint[](0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
@@ -58,7 +80,7 @@ void main(void)
     uint g = state[6];
     uint h = state[7];
 
-    for (uint i = 0u; i < 64u; i++)
+    for (int i = 0; i < 64; i++)
     {
         const uint t1 = h + EP1(e) + CH(e, f, g) + k[i] + m[i];
         const uint t2 = EP0(a) + MAJ(a, b, c);
@@ -81,6 +103,23 @@ void main(void)
     state[6] += g;
     state[7] += h;
 
-    for (uint i = 0u; i < 8u; i++)
-        hashBuffer.data[hashIndex + i] = state[i];
+    // count leading zeros
+    uint leadingZeros = 0;
+    bool done = false;
+    for (int i = 0; i < 8; i++) {
+        for (int j = 31; j >= 0; j--) {
+            if ((state[i] & (1u << j)) != 0u) {
+                done = true;
+                break;
+            }
+            ++leadingZeros;
+        }
+        if (done)
+            break;
+    }
+
+    if (leadingZeros >= minLeadingZeros) {
+        // found it!
+        atomicExchange(resultNonceIndex, nonceIndex);
+    }
 }

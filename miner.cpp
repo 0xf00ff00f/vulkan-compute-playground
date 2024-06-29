@@ -1,5 +1,9 @@
 #include "vc.hpp"
 
+extern "C" {
+#include "sha256.h"
+}
+
 #include <cassert>
 #include <chrono>
 #include <cstring>
@@ -14,57 +18,91 @@ public:
     explicit Miner(vc::Device *device);
     ~Miner();
 
-    void search(std::string_view prefix, std::size_t nonceSize);
+    void search(std::string_view prefix);
 
 private:
-    void enumerate(std::string &message, std::size_t index);
-    void doCompute(std::size_t messageSize);
-
     static constexpr auto BatchSize = 65536;
     static constexpr auto LocalSize = 256;
+    static constexpr auto NonceSize = 8;
+
+    int dumpResult(std::string_view prefix, uint32_t nonceIndex) const;
+
+    struct Input
+    {
+        uint32_t minLeadingZeros;
+        uint32_t nonceIndexBase;
+        uint32_t prefixSize;
+        uint32_t messagePrefix[16];
+    };
 
     vc::Device *m_device;
     vc::Program m_program;
-    vc::Buffer m_dataBuffer;
-    vc::Buffer m_stateBuffer;
-    uint32_t *m_data{nullptr};
-    uint32_t *m_state{nullptr};
+    vc::Buffer m_inputBuffer;
+    vc::Buffer m_resultBuffer;
+    Input *m_input{nullptr};
+    uint32_t *m_result{nullptr};
     std::size_t m_batchSize{0};
-    std::array<uint32_t, 8> m_bestHash;
     std::size_t m_hashCount{0};
 };
 
 Miner::Miner(vc::Device *device)
     : m_device(device)
     , m_program(m_device, "sha256-miner.comp.spv")
-    , m_dataBuffer(m_device, BatchSize * 16 * sizeof(uint32_t))
-    , m_stateBuffer(m_device, BatchSize * 8 * sizeof(uint32_t))
+    , m_inputBuffer(m_device, /* sizeof(Input) */ 256)
+    , m_resultBuffer(m_device, /* sizeof(uint32_t) */ 256)
 {
-    m_program.bind(m_stateBuffer, m_dataBuffer);
-    m_data = reinterpret_cast<uint32_t *>(m_dataBuffer.map());
-    m_state = reinterpret_cast<uint32_t *>(m_stateBuffer.map());
+    m_program.bind(m_inputBuffer, m_resultBuffer);
+    m_input = reinterpret_cast<Input *>(m_inputBuffer.map());
+    m_result = reinterpret_cast<uint32_t *>(m_resultBuffer.map());
 }
 
 Miner::~Miner()
 {
-    m_dataBuffer.unmap();
-    m_stateBuffer.unmap();
+    m_inputBuffer.unmap();
+    m_resultBuffer.unmap();
 }
 
-void Miner::search(std::string_view prefix, std::size_t nonceSize)
+void Miner::search(std::string_view prefix)
 {
-    m_bestHash.fill(~0u);
+    std::array<uint32_t, 16> message;
+    const std::size_t messageSize = prefix.size() + NonceSize;
+    message.fill(0);
+    {
+        auto *messageU8 = reinterpret_cast<uint8_t *>(message.data());
+        std::copy(prefix.begin(), prefix.end(), messageU8);
+        messageU8[messageSize] = 0x80;
+    }
+    message[15] = __builtin_bswap32(messageSize * 8);
+
     m_batchSize = 0;
     m_hashCount = 0;
 
     const auto timeStart = std::chrono::steady_clock::now();
 
-    std::string message;
-    message.resize(prefix.size() + nonceSize);
-    std::copy(prefix.begin(), prefix.end(), message.begin());
-    enumerate(message, prefix.size());
+    uint32_t nonceIndexBase = 0;
+    uint32_t minLeadingZeros = 4;
 
-    doCompute(message.size());
+    for (int i = 0; i < 65536; ++i)
+    {
+        m_input->minLeadingZeros = minLeadingZeros;
+        m_input->nonceIndexBase = nonceIndexBase;
+        m_input->prefixSize = prefix.size();
+        std::copy(message.begin(), message.end(), m_input->messagePrefix);
+
+        *m_result = ~0u;
+
+        const auto groupCount = (BatchSize + LocalSize - 1) / LocalSize;
+        m_program.dispatch(groupCount / LocalSize, 1, 1);
+        m_hashCount += BatchSize;
+
+        if (*m_result != ~0u)
+        {
+            int leadingZeros = dumpResult(prefix, *m_result);
+            minLeadingZeros = leadingZeros + 1;
+        }
+
+        nonceIndexBase += BatchSize;
+    }
 
     const auto timeEnd = std::chrono::steady_clock::now();
     const auto elapsed = timeEnd - timeStart;
@@ -74,77 +112,56 @@ void Miner::search(std::string_view prefix, std::size_t nonceSize)
                 std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(), hashesPerSec);
 }
 
-void Miner::enumerate(std::string &message, std::size_t index)
+int Miner::dumpResult(std::string_view prefix, uint32_t nonceIndex) const
 {
-    if (index == message.size())
+    constexpr std::array<char, 16> Charset = {0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+                                              0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46};
+    std::string message;
+    message.resize(prefix.size() + NonceSize);
+    std::copy(prefix.begin(), prefix.end(), message.begin());
+    for (std::size_t i = 0; i < 8; ++i)
     {
-        uint32_t *data = &m_data[m_batchSize * 16];
-        {
-            assert(message.size() < 56);
-            auto *u8Data = reinterpret_cast<uint8_t *>(data);
-            std::memset(u8Data, 0, 16 * sizeof(uint32_t));
-            std::memcpy(u8Data, message.data(), message.size());
-            u8Data[message.size()] = 0x80;
-            data[15] = __builtin_bswap32(message.size() * 8);
-        }
-
-        ++m_batchSize;
-        if (m_batchSize == BatchSize)
-            doCompute(message.size());
+        message[prefix.size() + i] = Charset[(nonceIndex >> (4 * i)) & 0xf];
     }
-    else
+
+    std::array<BYTE, 32> hash;
+    SHA256_CTX ctx;
+    sha256_init(&ctx);
+    sha256_update(&ctx, reinterpret_cast<const BYTE *>(message.data()), message.size());
+    sha256_final(&ctx, hash.data());
+
+    int leadingZeros = 0;
+    bool done = false;
+    for (auto b : hash)
     {
-        for (auto c : Charset)
+        for (int i = 7; i >= 0; --i)
         {
-            message[index] = c;
-            enumerate(message, index + 1);
-        }
-    }
-}
-
-void Miner::doCompute(std::size_t messageSize)
-{
-    if (m_batchSize == 0)
-        return;
-
-    const auto groupCount = (m_batchSize + LocalSize - 1) / LocalSize;
-    m_program.dispatch((m_batchSize + LocalSize - 1) / LocalSize, 1, 1);
-    m_hashCount += groupCount * LocalSize;
-
-    for (std::size_t index = 0; index < m_batchSize; ++index)
-    {
-        const auto *hash = &m_state[index * 8];
-        const auto isBest = [this, hash]() -> bool {
-            for (std::size_t i = 0; i < 8; ++i)
+            if (b & (1 << i))
             {
-                if (hash[i] < m_bestHash[i])
-                    return true;
-                if (m_bestHash[i] < hash[i])
-                    return false;
+                done = true;
+                break;
             }
-            return false;
-        }();
-        if (isBest)
-        {
-            const auto *message = reinterpret_cast<uint8_t *>(&m_data[index * 16]);
-            std::printf("%.*s: ", static_cast<int>(messageSize), message);
-            for (std::size_t i = 0; i < 8; ++i)
-                std::printf("%08x", hash[i]);
-            std::printf("\n");
-            std::copy(hash, hash + 8, m_bestHash.begin());
+            ++leadingZeros;
         }
+        if (done)
+            break;
     }
 
-    m_batchSize = 0;
+    std::printf("%s: ", message.c_str());
+    for (auto b : hash)
+        std::printf("%02x", b);
+    std::printf("\n");
+
+    return leadingZeros;
 }
 
 int main()
 {
     vc::Instance instance;
-    auto device = std::move(instance.devices().at(0));
+    auto device = std::move(instance.devices().at(1));
 
     const std::string_view prefix = "hello/";
 
     Miner miner(&device);
-    miner.search(prefix, 4);
+    miner.search(prefix);
 }
