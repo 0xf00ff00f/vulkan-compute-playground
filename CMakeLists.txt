@@ -36,7 +36,7 @@ endmacro()
 
 AddDemo(
     NAME simple
-	SOURCES main.cpp vc.cpp vc.hpp
+	SOURCES simple.cpp vc.cpp vc.hpp
 	SHADERS simple.comp
 )
 
