@@ -7,6 +7,13 @@ set(CMAKE_CXX_STANDARD 20)
 
 find_package(Vulkan REQUIRED)
 
+find_path(RENDERDOC_INCLUDE_DIR "renderdoc_app.h" HINTS "$ENV{RENDERDOC_DIR}/include")
+if (RENDERDOC_INCLUDE_DIR STREQUAL "RENDERDOC_INCLUDE_DIR-NOTFOUND")
+    set(USE_RENDERDOC FALSE)
+else()
+    set(USE_RENDERDOC TRUE)
+endif()
+
 find_program(GLSLANG_VALIDATOR glslangValidator REQUIRED)
 
 include(CMakeParseArguments)
@@ -20,12 +27,16 @@ macro(AddDemo)
 
     add_executable(${DEMO_NAME} ${DEMO_SOURCES})
     target_link_libraries(${DEMO_NAME} Vulkan::Vulkan)
+    if (USE_RENDERDOC)
+        target_include_directories(${DEMO_NAME} PRIVATE ${RENDERDOC_INCLUDE_DIR})
+        target_compile_definitions(${DEMO_NAME} PRIVATE USE_RENDERDOC)
+    endif()
 
     foreach(SHADER ${DEMO_SHADERS})
         set(OUTPUT_BINARY ${CMAKE_BINARY_DIR}/${SHADER}.spv)
         add_custom_command(
             OUTPUT ${OUTPUT_BINARY}
-            COMMAND ${GLSLANG_VALIDATOR} -V ${CMAKE_SOURCE_DIR}/${SHADER} -o ${OUTPUT_BINARY}
+            COMMAND ${GLSLANG_VALIDATOR} -gVS -V ${CMAKE_SOURCE_DIR}/${SHADER} -o ${OUTPUT_BINARY}
             DEPENDS ${PROJECT_SOURCE_DIR}/${SHADER})
         list(APPEND ${DEMO_NAME}_SPIRV_FILES ${OUTPUT_BINARY})
     endforeach(SHADER)

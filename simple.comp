@@ -1,13 +1,13 @@
 #version 460
 #extension GL_EXT_debug_printf : require
 
-layout (local_size_x = 1) in;
+layout (local_size_x = 16) in;
 layout (std430, binding = 0) buffer InBuffer { float inValues[]; };
 layout (std430, binding = 1) buffer OutBuffer { float outValues[]; };
 
 void main(void)
 {
-    debugPrintfEXT("Hello from thread %d\n", gl_GlobalInvocationID.x);
+    debugPrintfEXT("Hello from invocation %d\n", gl_GlobalInvocationID.x);
     uint id = gl_GlobalInvocationID.x;
     outValues[id] = inValues[id] * inValues[id];
 }
