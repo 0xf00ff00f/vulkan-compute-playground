@@ -1,4 +1,4 @@
-#include "vc.hpp"
+import vc;
 
 #ifdef USE_RENDERDOC
 #include <renderdoc_app.h>

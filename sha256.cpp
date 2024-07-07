@@ -1,8 +1,10 @@
-#include "vc.hpp"
+import vc;
 
+#include <array>
 #include <cassert>
+#include <cstdio>
 #include <cstring>
-#include <numeric>
+#include <string_view>
 
 std::array<uint8_t, 32> sha256(std::string_view message)
 {

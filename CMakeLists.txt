@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.28)
 
 project(test)
 
@@ -18,6 +18,10 @@ find_program(GLSLANG_VALIDATOR glslangValidator REQUIRED)
 
 include(CMakeParseArguments)
 
+add_library(vc)
+target_sources(vc PUBLIC FILE_SET CXX_MODULES FILES vc.cpp)
+target_link_libraries(vc PUBLIC Vulkan::Vulkan)
+
 macro(AddDemo)
     set(options)
     set(oneValueArgs NAME)
@@ -26,7 +30,7 @@ macro(AddDemo)
     cmake_parse_arguments(DEMO "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     add_executable(${DEMO_NAME} ${DEMO_SOURCES})
-    target_link_libraries(${DEMO_NAME} Vulkan::Vulkan)
+    target_link_libraries(${DEMO_NAME} vc)
     if (USE_RENDERDOC)
         target_include_directories(${DEMO_NAME} PRIVATE ${RENDERDOC_INCLUDE_DIR})
         target_compile_definitions(${DEMO_NAME} PRIVATE USE_RENDERDOC)
@@ -47,18 +51,18 @@ endmacro()
 
 AddDemo(
     NAME simple
-	SOURCES simple.cpp vc.cpp vc.hpp
+	SOURCES simple.cpp
 	SHADERS simple.comp
 )
 
 AddDemo(
     NAME sha256
-    SOURCES sha256 sha256.cpp vc.hpp vc.cpp
+    SOURCES sha256 sha256.cpp
     SHADERS sha256.comp
 )
 
 AddDemo(
     NAME miner
-    SOURCES miner.cpp vc.hpp vc.cpp sha256.h sha256.c
+    SOURCES miner.cpp sha256.h sha256.c
     SHADERS sha256-miner.comp
 )

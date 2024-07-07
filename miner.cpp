@@ -1,9 +1,10 @@
-#include "vc.hpp"
+import vc;
 
 extern "C" {
 #include "sha256.h"
 }
 
+#include <array>
 #include <cassert>
 #include <chrono>
 #include <cstring>
