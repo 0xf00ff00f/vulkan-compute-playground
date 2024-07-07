@@ -15,16 +15,6 @@ module;
 
 export module vc;
 
-#define VK_CHECK(call)                                                                                                 \
-    {                                                                                                                  \
-        const auto result = (call);                                                                                    \
-        if (result != VK_SUCCESS)                                                                                      \
-        {                                                                                                              \
-            std::fprintf(stderr, "Vulkan error at %s:%d: %d\n", __FILE__, __LINE__, result);                           \
-            std::exit(EXIT_FAILURE);                                                                                   \
-        }                                                                                                              \
-    }
-
 export namespace vc
 {
 class Device;
@@ -128,103 +118,13 @@ public:
     friend void swap(Program &lhs, Program &rhs);
 
     template<std::convertible_to<VkBuffer>... Buffers>
-    void bind(const Buffers &...buffers)
-    {
-        releasePipeline();
-        initPipeline(buffers...);
-    }
+    void bind(const Buffers &...buffers);
 
     void dispatch(uint32_t groupCountX = 1, uint32_t groupCountY = 1, uint32_t groupCountZ = 1) const;
 
 private:
     template<std::convertible_to<VkBuffer>... Buffers>
-    void initPipeline(const Buffers &...buffers)
-    {
-        const auto descriptorSetLayoutBindings = std::invoke(
-            []<std::size_t... Idx>(std::index_sequence<Idx...>) {
-                return std::array{VkDescriptorSetLayoutBinding{.binding = Idx,
-                                                               .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                                               .descriptorCount = 1,
-                                                               .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                                                               .pImmutableSamplers = nullptr}...};
-            },
-            std::index_sequence_for<Buffers...>{});
-
-        const VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .pNext = nullptr,
-            .flags = 0,
-            .bindingCount = static_cast<uint32_t>(descriptorSetLayoutBindings.size()),
-            .pBindings = descriptorSetLayoutBindings.data()};
-        VK_CHECK(
-            vkCreateDescriptorSetLayout(*m_device, &descriptorSetLayoutCreateInfo, nullptr, &m_descriptorSetLayout));
-
-        const VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {.sType =
-                                                                         VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                                                                     .pNext = nullptr,
-                                                                     .flags = 0,
-                                                                     .setLayoutCount = 1,
-                                                                     .pSetLayouts = &m_descriptorSetLayout,
-                                                                     .pushConstantRangeCount = 0,
-                                                                     .pPushConstantRanges = nullptr};
-        VK_CHECK(vkCreatePipelineLayout(*m_device, &pipelineLayoutCreateInfo, nullptr, &m_pipelineLayout));
-
-        const VkComputePipelineCreateInfo computePipelineCreateInfo = {
-            .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-            .pNext = nullptr,
-            .flags = 0,
-            .stage = VkPipelineShaderStageCreateInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                                                     .pNext = nullptr,
-                                                     .flags = 0,
-                                                     .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-                                                     .module = m_shaderModule,
-                                                     .pName = "main",
-                                                     .pSpecializationInfo = nullptr},
-            .layout = m_pipelineLayout,
-            .basePipelineHandle = VK_NULL_HANDLE,
-            .basePipelineIndex = 0};
-        VK_CHECK(
-            vkCreateComputePipelines(*m_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &m_pipeline));
-
-        const VkDescriptorPoolSize descriptorPoolSize = {
-            .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .descriptorCount = sizeof...(Buffers),
-        };
-        const VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {.sType =
-                                                                         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-                                                                     .pNext = nullptr,
-                                                                     .flags = 0,
-                                                                     .maxSets = 1,
-                                                                     .poolSizeCount = 1,
-                                                                     .pPoolSizes = &descriptorPoolSize};
-        VK_CHECK(vkCreateDescriptorPool(*m_device, &descriptorPoolCreateInfo, nullptr, &m_descriptorPool));
-
-        const VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .pNext = nullptr,
-            .descriptorPool = m_descriptorPool,
-            .descriptorSetCount = 1,
-            .pSetLayouts = &m_descriptorSetLayout};
-        VK_CHECK(vkAllocateDescriptorSets(*m_device, &descriptorSetAllocateInfo, &m_descriptorSet));
-
-        const auto bufferInfos = std::array{
-            VkDescriptorBufferInfo{.buffer = static_cast<VkBuffer>(buffers), .offset = 0, .range = VK_WHOLE_SIZE}...};
-        const auto writeDescriptorSets = std::invoke(
-            [this, &bufferInfos]<std::size_t... Idx>(std::index_sequence<Idx...>) {
-                return std::array{VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                                       .pNext = nullptr,
-                                                       .dstSet = m_descriptorSet,
-                                                       .dstBinding = Idx,
-                                                       .dstArrayElement = 0,
-                                                       .descriptorCount = 1,
-                                                       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                                       .pImageInfo = nullptr,
-                                                       .pBufferInfo = &bufferInfos[Idx],
-                                                       .pTexelBufferView = nullptr}...};
-            },
-            std::index_sequence_for<Buffers...>{});
-        vkUpdateDescriptorSets(*m_device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, nullptr);
-    }
+    void initPipeline(const Buffers &...buffers);
 
     void releasePipeline();
 
@@ -238,6 +138,16 @@ private:
 };
 
 } // namespace vc
+
+#define VK_CHECK(call)                                                                                                 \
+    {                                                                                                                  \
+        const auto result = (call);                                                                                    \
+        if (result != VK_SUCCESS)                                                                                      \
+        {                                                                                                              \
+            std::fprintf(stderr, "Vulkan error at %s:%d: %d\n", __FILE__, __LINE__, result);                           \
+            std::exit(EXIT_FAILURE);                                                                                   \
+        }                                                                                                              \
+    }
 
 namespace vc
 {
@@ -320,6 +230,98 @@ void Program::releasePipeline()
 
     if (m_descriptorSetLayout)
         vkDestroyDescriptorSetLayout(*m_device, m_descriptorSetLayout, nullptr);
+}
+
+template<std::convertible_to<VkBuffer>... Buffers>
+void Program::bind(const Buffers &...buffers)
+{
+    releasePipeline();
+    initPipeline(buffers...);
+}
+
+template<std::convertible_to<VkBuffer>... Buffers>
+void Program::initPipeline(const Buffers &...buffers)
+{
+    const auto descriptorSetLayoutBindings = std::invoke(
+        []<std::size_t... Idx>(std::index_sequence<Idx...>) {
+            return std::array{VkDescriptorSetLayoutBinding{.binding = Idx,
+                                                           .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                                           .descriptorCount = 1,
+                                                           .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                                                           .pImmutableSamplers = nullptr}...};
+        },
+        std::index_sequence_for<Buffers...>{});
+
+    const VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .bindingCount = static_cast<uint32_t>(descriptorSetLayoutBindings.size()),
+        .pBindings = descriptorSetLayoutBindings.data()};
+    VK_CHECK(vkCreateDescriptorSetLayout(*m_device, &descriptorSetLayoutCreateInfo, nullptr, &m_descriptorSetLayout));
+
+    const VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                                                                 .pNext = nullptr,
+                                                                 .flags = 0,
+                                                                 .setLayoutCount = 1,
+                                                                 .pSetLayouts = &m_descriptorSetLayout,
+                                                                 .pushConstantRangeCount = 0,
+                                                                 .pPushConstantRanges = nullptr};
+    VK_CHECK(vkCreatePipelineLayout(*m_device, &pipelineLayoutCreateInfo, nullptr, &m_pipelineLayout));
+
+    const VkComputePipelineCreateInfo computePipelineCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .stage = VkPipelineShaderStageCreateInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                                 .pNext = nullptr,
+                                                 .flags = 0,
+                                                 .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+                                                 .module = m_shaderModule,
+                                                 .pName = "main",
+                                                 .pSpecializationInfo = nullptr},
+        .layout = m_pipelineLayout,
+        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineIndex = 0};
+    VK_CHECK(vkCreateComputePipelines(*m_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &m_pipeline));
+
+    const VkDescriptorPoolSize descriptorPoolSize = {
+        .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .descriptorCount = sizeof...(Buffers),
+    };
+    const VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+                                                                 .pNext = nullptr,
+                                                                 .flags = 0,
+                                                                 .maxSets = 1,
+                                                                 .poolSizeCount = 1,
+                                                                 .pPoolSizes = &descriptorPoolSize};
+    VK_CHECK(vkCreateDescriptorPool(*m_device, &descriptorPoolCreateInfo, nullptr, &m_descriptorPool));
+
+    const VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {.sType =
+                                                                       VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                                                                   .pNext = nullptr,
+                                                                   .descriptorPool = m_descriptorPool,
+                                                                   .descriptorSetCount = 1,
+                                                                   .pSetLayouts = &m_descriptorSetLayout};
+    VK_CHECK(vkAllocateDescriptorSets(*m_device, &descriptorSetAllocateInfo, &m_descriptorSet));
+
+    const auto bufferInfos = std::array{
+        VkDescriptorBufferInfo{.buffer = static_cast<VkBuffer>(buffers), .offset = 0, .range = VK_WHOLE_SIZE}...};
+    const auto writeDescriptorSets = std::invoke(
+        [this, &bufferInfos]<std::size_t... Idx>(std::index_sequence<Idx...>) {
+            return std::array{VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                                   .pNext = nullptr,
+                                                   .dstSet = m_descriptorSet,
+                                                   .dstBinding = Idx,
+                                                   .dstArrayElement = 0,
+                                                   .descriptorCount = 1,
+                                                   .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                                   .pImageInfo = nullptr,
+                                                   .pBufferInfo = &bufferInfos[Idx],
+                                                   .pTexelBufferView = nullptr}...};
+        },
+        std::index_sequence_for<Buffers...>{});
+    vkUpdateDescriptorSets(*m_device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, nullptr);
 }
 
 void Program::dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) const
