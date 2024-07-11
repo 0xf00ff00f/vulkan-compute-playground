@@ -23,14 +23,6 @@ layout (std430, binding = 1) buffer ResultBuffer {
 #define SIG0(x) (ROTRIGHT(x, 7) ^ ROTRIGHT(x, 18) ^ ((x) >> 3))
 #define SIG1(x) (ROTRIGHT(x, 17) ^ ROTRIGHT(x, 19) ^ ((x) >> 10))
 
-uint bswap(uint x)
-{
-    return ((x << 24) & 0xff000000) |
-           ((x <<  8) & 0x00ff0000) |
-           ((x >>  8) & 0x0000ff00) |
-           ((x >> 24) & 0x000000ff);
-}
-
 void main(void)
 {
     const uint charset[16] = uint[](
@@ -49,20 +41,16 @@ void main(void)
 
     uint nonceIndex = nonceIndexBase + gl_GlobalInvocationID.x;
 
-    uint message[16];
+    uint m[64];
     for (int i = 0; i < 16; i++)
-        message[i] = messagePrefix[i];
+        m[i] = messagePrefix[i];
     for (int i = 0; i < 8; i++)
     {
         uint byteIndex = prefixSize + i;
-        uint shift = (byteIndex % 4) * 8;
+        uint shift = (3 - (byteIndex % 4)) * 8;
         uint c = charset[(nonceIndex >> (4 * i)) & 0xf] << shift;
-        message[byteIndex / 4] |= c;
+        m[byteIndex / 4] |= c;
     }
-
-    uint m[64];
-    for (int i = 0; i < 16; i++)
-        m[i] = bswap(message[i]);
     for (int i = 16; i < 64; i++)
         m[i] = SIG1(m[i - 2]) + m[i - 7] + SIG0(m[i - 15]) + m[i - 16];
 

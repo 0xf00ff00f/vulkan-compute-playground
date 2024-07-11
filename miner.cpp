@@ -76,7 +76,9 @@ void Miner::search(std::string_view prefix)
         std::copy(prefix.begin(), prefix.end(), messageU8);
         messageU8[messageSize] = 0x80;
     }
-    message[15] = __builtin_bswap32(messageSize * 8);
+    for (std::size_t i = 0; i < 14; ++i)
+        message[i] = __builtin_bswap32(message[i]);
+    message[15] = messageSize * 8;
 
     const auto timeStart = std::chrono::steady_clock::now();
 
