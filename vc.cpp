@@ -164,11 +164,10 @@ uint32_t findComputeQueueFamily(VkPhysicalDevice physDevice)
     std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyPropertiesCount);
     vkGetPhysicalDeviceQueueFamilyProperties(physDevice, &queueFamilyPropertiesCount, queueFamilyProperties.data());
 
-    auto it = std::find_if(queueFamilyProperties.begin(), queueFamilyProperties.end(),
-                           [](const VkQueueFamilyProperties &properties) -> bool {
-                               const VkQueueFlags flags = properties.queueFlags;
-                               return flags & VK_QUEUE_COMPUTE_BIT;
-                           });
+    auto it = std::ranges::find_if(queueFamilyProperties, [](const VkQueueFamilyProperties &properties) -> bool {
+        const VkQueueFlags flags = properties.queueFlags;
+        return flags & VK_QUEUE_COMPUTE_BIT;
+    });
     if (it == queueFamilyProperties.end())
         return ~0u;
 
