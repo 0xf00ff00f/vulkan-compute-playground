@@ -6,6 +6,7 @@ module;
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -176,16 +177,15 @@ uint32_t findComputeQueueFamily(VkPhysicalDevice physDevice)
 
 std::optional<std::vector<std::byte>> readFile(const std::string &path)
 {
-    FILE *stream = fopen(path.c_str(), "rb");
-    if (!stream)
+    using File = std::unique_ptr<std::FILE, decltype(&std::fclose)>;
+    File file(std::fopen(path.c_str(), "rb"), std::fclose);
+    if (!file)
         return std::nullopt;
-
-    fseek(stream, 0l, SEEK_END);
-    const auto size = ftell(stream);
-    fseek(stream, 0, SEEK_SET);
+    std::fseek(file.get(), 0l, SEEK_END);
+    const auto size = ftell(file.get());
+    std::fseek(file.get(), 0, SEEK_SET);
     std::vector<std::byte> data(size);
-    fread(data.data(), 1, data.size(), stream);
-    fclose(stream);
+    std::fread(data.data(), 1, data.size(), file.get());
 
     return data;
 }
