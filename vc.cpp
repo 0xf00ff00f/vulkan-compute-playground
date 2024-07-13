@@ -8,6 +8,7 @@ module;
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -76,11 +77,13 @@ private:
     VkQueue m_computeQueue{VK_NULL_HANDLE};
 };
 
+template<typename T>
 class Buffer
 {
 public:
     Buffer() = default;
-    Buffer(const Device *device, VkDeviceSize size);
+    Buffer(const Device *device, std::size_t size = 1);
+    Buffer(const Device *device, std::span<const T> data);
     ~Buffer();
 
     Buffer(const Buffer &) = delete;
@@ -93,12 +96,12 @@ public:
 
     operator VkBuffer() const { return m_buffer; }
 
-    std::byte *map() const;
+    std::span<T> map() const;
     void unmap() const;
 
 private:
     const Device *m_device{nullptr};
-    VkDeviceSize m_size{0};
+    VkDeviceSize m_sizeInBytes{0};
     VkDeviceMemory m_deviceMemory{VK_NULL_HANDLE};
     VkBuffer m_buffer{VK_NULL_HANDLE};
 };
@@ -353,35 +356,49 @@ void Program::dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t grou
     VK_CHECK(vkQueueWaitIdle(queue));
 }
 
-Buffer::Buffer(const Device *device, VkDeviceSize size)
+template<typename T>
+Buffer<T>::Buffer(const Device *device, std::size_t size)
     : m_device(device)
-    , m_size(size)
+    , m_sizeInBytes(size * sizeof(T))
 {
     const auto memoryTypeIndex = device->findHostVisibleMemory(size);
     if (memoryTypeIndex != ~0u)
     {
-        const VkMemoryAllocateInfo memoryAllocateInfo = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                                                         .pNext = nullptr,
-                                                         .allocationSize = m_size,
-                                                         .memoryTypeIndex = memoryTypeIndex};
-        VK_CHECK(vkAllocateMemory(*m_device, &memoryAllocateInfo, nullptr, &m_deviceMemory));
-
         uint32_t computeQueueFamilyIndex = device->computeQueueFamilyIndex();
         const VkBufferCreateInfo bufferCreateInfo = {.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
                                                      .pNext = nullptr,
                                                      .flags = 0,
-                                                     .size = m_size,
+                                                     .size = m_sizeInBytes,
                                                      .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                                      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
                                                      .queueFamilyIndexCount = 1,
                                                      .pQueueFamilyIndices = &computeQueueFamilyIndex};
         VK_CHECK(vkCreateBuffer(*m_device, &bufferCreateInfo, nullptr, &m_buffer));
 
+        VkMemoryRequirements memoryRequirements{};
+        vkGetBufferMemoryRequirements(*m_device, m_buffer, &memoryRequirements);
+
+        const VkMemoryAllocateInfo memoryAllocateInfo = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                                                         .pNext = nullptr,
+                                                         .allocationSize = memoryRequirements.size,
+                                                         .memoryTypeIndex = memoryTypeIndex};
+        VK_CHECK(vkAllocateMemory(*m_device, &memoryAllocateInfo, nullptr, &m_deviceMemory));
+
         VK_CHECK(vkBindBufferMemory(*m_device, m_buffer, m_deviceMemory, 0));
     }
 }
 
-Buffer::~Buffer()
+template<typename T>
+Buffer<T>::Buffer(const Device *device, std::span<const T> data)
+    : Buffer(device, data.size())
+{
+    auto bufferData = map();
+    std::ranges::copy(data, bufferData.begin());
+    unmap();
+}
+
+template<typename T>
+Buffer<T>::~Buffer()
 {
     if (m_buffer)
         vkDestroyBuffer(*m_device, m_buffer, nullptr);
@@ -390,37 +407,42 @@ Buffer::~Buffer()
         vkFreeMemory(*m_device, m_deviceMemory, nullptr);
 }
 
-Buffer::Buffer(Buffer &&rhs)
+template<typename T>
+Buffer<T>::Buffer(Buffer &&rhs)
     : m_device(std::exchange(rhs.m_device, nullptr))
-    , m_size(std::exchange(rhs.m_size, 0))
+    , m_sizeInBytes(std::exchange(rhs.m_sizeInBytes, 0))
     , m_deviceMemory(std::exchange(rhs.m_deviceMemory, VK_NULL_HANDLE))
     , m_buffer(std::exchange(rhs.m_buffer, VK_NULL_HANDLE))
 {
 }
 
-Buffer &Buffer::operator=(Buffer rhs)
+template<typename T>
+Buffer<T> &Buffer<T>::operator=(Buffer rhs)
 {
     swap(*this, rhs);
     return *this;
 }
 
-void swap(Buffer &lhs, Buffer &rhs)
+template<typename T>
+void swap(Buffer<T> &lhs, Buffer<T> &rhs)
 {
     using std::swap;
     swap(lhs.m_device, rhs.m_device);
-    swap(lhs.m_size, rhs.m_size);
+    swap(lhs.m_sizeInBytes, rhs.m_sizeInBytes);
     swap(lhs.m_deviceMemory, rhs.m_deviceMemory);
     swap(lhs.m_buffer, rhs.m_buffer);
 }
 
-std::byte *Buffer::map() const
+template<typename T>
+std::span<T> Buffer<T>::map() const
 {
     std::byte *data;
-    VK_CHECK(vkMapMemory(*m_device, m_deviceMemory, 0, m_size, 0, reinterpret_cast<void **>(&data)));
-    return data;
+    VK_CHECK(vkMapMemory(*m_device, m_deviceMemory, 0, m_sizeInBytes, 0, reinterpret_cast<void **>(&data)));
+    return {reinterpret_cast<T *>(data), m_sizeInBytes / sizeof(T)};
 }
 
-void Buffer::unmap() const
+template<typename T>
+void Buffer<T>::unmap() const
 {
     vkUnmapMemory(*m_device, m_deviceMemory);
 }

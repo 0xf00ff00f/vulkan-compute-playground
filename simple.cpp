@@ -8,6 +8,7 @@ import vc;
 #include <cstdio>
 #include <dlfcn.h>
 #include <numeric>
+#include <span>
 
 int main()
 {
@@ -29,13 +30,13 @@ int main()
 
     constexpr auto Size = 32;
 
-    vc::Buffer inBuffer(&device, Size * sizeof(float));
+    vc::Buffer<float> inBuffer(&device, Size);
     {
-        auto *p = reinterpret_cast<float *>(inBuffer.map());
-        std::iota(p, p + Size, 1);
+        auto values = inBuffer.map();
+        std::iota(values.begin(), values.end(), 1);
         inBuffer.unmap();
     }
-    vc::Buffer outBuffer(&device, Size * sizeof(float));
+    vc::Buffer<float> outBuffer(&device, Size);
 
     vc::Program program(&device, "simple.comp.spv");
     program.bind(inBuffer, outBuffer);
@@ -44,9 +45,9 @@ int main()
     constexpr auto BlockCount = (Size + ThreadCount - 1) / ThreadCount;
     program.dispatch(BlockCount, 1, 1);
     {
-        const auto *p = reinterpret_cast<const float *>(outBuffer.map());
+        const auto values = outBuffer.map();
         for (std::size_t i = 0; i < Size; ++i)
-            std::printf("%lu: %f\n", i, p[i]);
+            std::printf("%lu: %f\n", i, values[i]);
         outBuffer.unmap();
     }
 

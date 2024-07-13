@@ -43,8 +43,8 @@ private:
 
     vc::Device *m_device;
     vc::Program m_program;
-    vc::Buffer m_inputBuffer;
-    vc::Buffer m_resultBuffer;
+    vc::Buffer<Input> m_inputBuffer;
+    vc::Buffer<Result> m_resultBuffer;
     Input *m_input{nullptr};
     Result *m_result{nullptr};
 };
@@ -52,12 +52,12 @@ private:
 Miner::Miner(vc::Device *device)
     : m_device(device)
     , m_program(m_device, "sha256-miner.comp.spv")
-    , m_inputBuffer(m_device, /* sizeof(Input) */ 256)
-    , m_resultBuffer(m_device, /* sizeof(uint32_t) */ 256)
+    , m_inputBuffer(m_device)
+    , m_resultBuffer(m_device)
 {
     m_program.bind(m_inputBuffer, m_resultBuffer);
-    m_input = reinterpret_cast<Input *>(m_inputBuffer.map());
-    m_result = reinterpret_cast<Result *>(m_resultBuffer.map());
+    m_input = m_inputBuffer.map().data();
+    m_result = m_resultBuffer.map().data();
 }
 
 Miner::~Miner()

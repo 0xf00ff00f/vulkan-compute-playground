@@ -4,6 +4,7 @@ import vc;
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <span>
 #include <string_view>
 
 std::array<uint8_t, 32> sha256(std::string_view message)
@@ -25,19 +26,8 @@ std::array<uint8_t, 32> sha256(std::string_view message)
     vc::Instance instance;
     auto device = std::move(instance.devices().at(0));
 
-    vc::Buffer dataBuffer(&device, data.size() * sizeof(uint32_t));
-    {
-        auto *bufferData = reinterpret_cast<uint32_t *>(dataBuffer.map());
-        std::copy(data.begin(), data.end(), bufferData);
-        dataBuffer.unmap();
-    }
-
-    vc::Buffer stateBuffer(&device, state.size() * sizeof(uint32_t));
-    {
-        auto *bufferData = reinterpret_cast<uint32_t *>(stateBuffer.map());
-        std::copy(state.begin(), state.end(), bufferData);
-        stateBuffer.unmap();
-    }
+    vc::Buffer<uint32_t> dataBuffer(&device, data);
+    vc::Buffer<uint32_t> stateBuffer(&device, state);
 
     vc::Program program(&device, "sha256.comp.spv");
     program.bind(stateBuffer, dataBuffer);
@@ -45,10 +35,11 @@ std::array<uint8_t, 32> sha256(std::string_view message)
 
     std::array<uint8_t, 32> hash;
     {
-        const auto *bufferData = reinterpret_cast<const uint32_t *>(stateBuffer.map());
+        const auto bufferData = stateBuffer.map();
         auto *hashData = reinterpret_cast<uint32_t *>(hash.data());
         for (std::size_t i = 0; i < 8; ++i)
             hashData[i] = __builtin_bswap32(bufferData[i]);
+        stateBuffer.unmap();
     }
     return hash;
 }
