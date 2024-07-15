@@ -31,9 +31,9 @@ public:
     Instance(Instance &&rhs);
 
     Instance &operator=(const Instance &) = delete;
-    Instance &operator=(Instance rhs);
+    Instance &operator=(Instance &&rhs);
 
-    friend void swap(Instance &lhs, Instance &rhs);
+    friend inline void swap(Instance &lhs, Instance &rhs) { std::swap(lhs.m_instance, rhs.m_instance); }
 
     operator VkInstance() const { return m_instance; }
 
@@ -54,9 +54,19 @@ public:
     Device(Device &&rhs);
 
     Device &operator=(const Device &) = delete;
-    Device &operator=(Device rhs);
+    Device &operator=(Device &&rhs);
 
-    friend void swap(Device &lhs, Device &rhs);
+    friend inline void swap(Device &lhs, Device &rhs)
+    {
+        using std::swap;
+        swap(lhs.m_instance, rhs.m_instance);
+        swap(lhs.m_physDevice, rhs.m_physDevice);
+        swap(lhs.m_queueFamilyIndex, rhs.m_queueFamilyIndex);
+        swap(lhs.m_device, rhs.m_device);
+        swap(lhs.m_commandPool, rhs.m_commandPool);
+        swap(lhs.m_commandBuffer, rhs.m_commandBuffer);
+        swap(lhs.m_computeQueue, rhs.m_computeQueue);
+    }
 
     operator VkDevice() const { return m_device; }
 
@@ -90,9 +100,16 @@ public:
     Buffer(Buffer &&rhs);
 
     Buffer &operator=(const Buffer &) = delete;
-    Buffer &operator=(Buffer rhs);
+    Buffer &operator=(Buffer &&rhs);
 
-    friend void swap(Buffer &lhs, Buffer &rhs);
+    friend inline void swap(Buffer &lhs, Buffer &rhs)
+    {
+        using std::swap;
+        swap(lhs.m_device, rhs.m_device);
+        swap(lhs.m_sizeInBytes, rhs.m_sizeInBytes);
+        swap(lhs.m_deviceMemory, rhs.m_deviceMemory);
+        swap(lhs.m_buffer, rhs.m_buffer);
+    }
 
     operator VkBuffer() const { return m_buffer; }
 
@@ -117,9 +134,19 @@ public:
     Program(Program &&rhs);
 
     Program &operator=(const Program &) = delete;
-    Program &operator=(Program rhs);
+    Program &operator=(Program &&rhs);
 
-    friend void swap(Program &lhs, Program &rhs);
+    friend inline void swap(Program &lhs, Program &rhs)
+    {
+        using std::swap;
+        swap(lhs.m_device, rhs.m_device);
+        swap(lhs.m_shaderModule, rhs.m_shaderModule);
+        swap(lhs.m_descriptorSetLayout, rhs.m_descriptorSetLayout);
+        swap(lhs.m_pipelineLayout, rhs.m_pipelineLayout);
+        swap(lhs.m_pipeline, rhs.m_pipeline);
+        swap(lhs.m_descriptorPool, rhs.m_descriptorPool);
+        swap(lhs.m_descriptorSet, rhs.m_descriptorSet);
+    }
 
     template<std::convertible_to<VkBuffer>... Buffers>
     void bind(const Buffers &...buffers);
@@ -217,6 +244,24 @@ Program::~Program()
         vkDestroyShaderModule(*m_device, m_shaderModule, nullptr);
 
     releasePipeline();
+}
+
+Program::Program(Program &&rhs)
+    : m_device(std::exchange(rhs.m_device, nullptr))
+    , m_shaderModule(std::exchange(rhs.m_shaderModule, VK_NULL_HANDLE))
+    , m_descriptorSetLayout(std::exchange(rhs.m_descriptorSetLayout, VK_NULL_HANDLE))
+    , m_pipelineLayout(std::exchange(rhs.m_pipelineLayout, VK_NULL_HANDLE))
+    , m_pipeline(std::exchange(rhs.m_pipeline, VK_NULL_HANDLE))
+    , m_descriptorPool(std::exchange(rhs.m_descriptorPool, VK_NULL_HANDLE))
+    , m_descriptorSet(std::exchange(rhs.m_descriptorSet, VK_NULL_HANDLE))
+{
+}
+
+Program &Program::operator=(Program &&rhs)
+{
+    Program temp(std::move(rhs));
+    swap(*this, temp);
+    return *this;
 }
 
 void Program::releasePipeline()
@@ -417,20 +462,11 @@ Buffer<T>::Buffer(Buffer &&rhs)
 }
 
 template<typename T>
-Buffer<T> &Buffer<T>::operator=(Buffer rhs)
+Buffer<T> &Buffer<T>::operator=(Buffer &&rhs)
 {
-    swap(*this, rhs);
+    Buffer temp(std::move(rhs));
+    swap(*this, temp);
     return *this;
-}
-
-template<typename T>
-void swap(Buffer<T> &lhs, Buffer<T> &rhs)
-{
-    using std::swap;
-    swap(lhs.m_device, rhs.m_device);
-    swap(lhs.m_sizeInBytes, rhs.m_sizeInBytes);
-    swap(lhs.m_deviceMemory, rhs.m_deviceMemory);
-    swap(lhs.m_buffer, rhs.m_buffer);
 }
 
 template<typename T>
@@ -519,9 +555,10 @@ Device::Device(Device &&rhs)
 {
 }
 
-Device &Device::operator=(Device rhs)
+Device &Device::operator=(Device &&rhs)
 {
-    swap(*this, rhs);
+    Device temp(std::move(rhs));
+    swap(*this, temp);
     return *this;
 }
 
@@ -543,18 +580,6 @@ std::uint32_t Device::findHostVisibleMemory(VkDeviceSize size) const
     }
 
     return ~0u;
-}
-
-void swap(Device &lhs, Device &rhs)
-{
-    using std::swap;
-    swap(lhs.m_instance, rhs.m_instance);
-    swap(lhs.m_physDevice, rhs.m_physDevice);
-    swap(lhs.m_queueFamilyIndex, rhs.m_queueFamilyIndex);
-    swap(lhs.m_device, rhs.m_device);
-    swap(lhs.m_commandPool, rhs.m_commandPool);
-    swap(lhs.m_commandBuffer, rhs.m_commandBuffer);
-    swap(lhs.m_computeQueue, rhs.m_computeQueue);
 }
 
 Instance::Instance()
@@ -591,15 +616,11 @@ Instance::Instance(Instance &&rhs)
 {
 }
 
-Instance &Instance::operator=(Instance rhs)
+Instance &Instance::operator=(Instance &&rhs)
 {
-    swap(*this, rhs);
+    Instance temp(std::move(rhs));
+    swap(*this, temp);
     return *this;
-}
-
-void swap(Instance &lhs, Instance &rhs)
-{
-    std::swap(lhs.m_instance, rhs.m_instance);
 }
 
 std::vector<Device> Instance::devices() const
