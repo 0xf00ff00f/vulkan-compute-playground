@@ -4,6 +4,7 @@ extern "C" {
 #include "sha256.h"
 }
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <chrono>
@@ -69,16 +70,18 @@ Miner::~Miner()
 void Miner::search(std::string_view prefix)
 {
     std::array<uint32_t, 16> message;
-    const std::size_t messageSize = prefix.size() + NonceSize;
     message.fill(0);
+    const std::size_t messageSize = prefix.size() + NonceSize;
     {
         auto *messageU8 = reinterpret_cast<uint8_t *>(message.data());
-        std::copy(prefix.begin(), prefix.end(), messageU8);
+        std::ranges::copy(prefix, messageU8);
         messageU8[messageSize] = 0x80;
     }
     for (std::size_t i = 0; i < 14; ++i)
         message[i] = __builtin_bswap32(message[i]);
     message[15] = messageSize * 8;
+    std::ranges::copy(message, m_input->messagePrefix);
+    m_input->prefixSize = prefix.size();
 
     const auto timeStart = std::chrono::steady_clock::now();
 
@@ -89,8 +92,6 @@ void Miner::search(std::string_view prefix)
     {
         m_input->minLeadingZeros = minLeadingZeros;
         m_input->nonceIndexBase = nonceIndexBase;
-        m_input->prefixSize = prefix.size();
-        std::copy(message.begin(), message.end(), m_input->messagePrefix);
 
         m_result->nonceIndex = ~0u;
 
@@ -122,7 +123,7 @@ int Miner::dumpResult(std::string_view prefix, uint32_t nonceIndex) const
                                               0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46};
     std::string message;
     message.resize(prefix.size() + NonceSize);
-    std::copy(prefix.begin(), prefix.end(), message.begin());
+    std::ranges::copy(prefix, message.begin());
     for (std::size_t i = 0; i < 8; ++i)
     {
         message[prefix.size() + i] = Charset[(nonceIndex >> (4 * i)) & 0xf];
@@ -162,7 +163,7 @@ int Miner::dumpResult(std::string_view prefix, uint32_t nonceIndex) const
 int main()
 {
     vc::Instance instance;
-    auto device = std::move(instance.devices().at(0));
+    auto device = std::move(instance.devices().at(1));
 
     const std::string_view prefix = "hello/";
 
