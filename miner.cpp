@@ -12,8 +12,6 @@ extern "C" {
 
 using namespace std::string_view_literals;
 
-constexpr std::string_view Charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"sv;
-
 class Miner
 {
 public:
